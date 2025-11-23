@@ -216,3 +216,18 @@ The SDK includes a tiny C++17 ThreadPool:
 - Heavy filters like blur may cost more time on very large images
 
 - YUV conversion performance depends on memory stride/alignment
+
+## 9. Future Paths and updates
+- Adding Gpu vulkan support for computations.
+- Adding more real time beauty filters.
+- Adding face detections and filter integration.
+- Adding bench marks for performance.
+
+
+
+
+
+
+
+
+
