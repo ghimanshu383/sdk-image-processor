@@ -158,9 +158,9 @@ The NEON code uses:
 
 - Scalar fallback is automatically triggered when:
 
-- Width is not divisible by vector width
+    - Width is not divisible by vector width
 
-- Device lacks NEON (rare on modern devices)
+    - Device lacks NEON (rare on modern devices)
 
 ## 6. ThreadPool
 
