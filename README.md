@@ -180,8 +180,8 @@ The SDK includes a tiny C++17 ThreadPool:
 
 1. Create any folder inside you app folder and place the aar there:
 
-2. Add the dependency for the same in gradle implementation(files("<folderName>/native-image-processor-sdk-1.0.0.aar"))
-3. For CameraX to run Add the following dependencies in app level gradle
+2. Add the dependency for the same in gradle implementation(files("folderName/native-image-processor-sdk-1.0.0.aar"))
+3. For CameraX to run Add the following dependencies in app level gradle.(only if you are using the camerax example from kotlin-api)
        var camerax_version = "1.3.1"
 
     api("androidx.camera:camera-core:$camerax_version")
