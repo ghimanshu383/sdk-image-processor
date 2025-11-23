@@ -178,34 +178,53 @@ The SDK includes a tiny C++17 ThreadPool:
 
 ## 7. Using this SDK
 
-1. Create any folder inside you app folder and place the aar there:
+#### 1. Add the AAR
 
-2. Add the dependency for the same in gradle implementation(files("folderName/native-image-processor-sdk-1.0.0.aar"))
-3. For CameraX to run Add the following dependencies in app level gradle.(only if you are using the camerax example from kotlin-api)
-       var camerax_version = "1.3.1"
+Place the AAR inside any folder in your project and add:
 
-    api("androidx.camera:camera-core:$camerax_version")
-    api("androidx.camera:camera-camera2:$camerax_version")
-    api("androidx.camera:camera-lifecycle:$camerax_version")
-    api("androidx.camera:camera-video:$camerax_version")
-    api("androidx.camera:camera-view:$camerax_version")
-    api("androidx.camera:camera-extensions:$camerax_version")
+implementation(files("folderName/native-image-processor-sdk-1.0.0.aar"))
 
-4. Then load and use from Kotlin:
+### 2. CameraX Dependencies
 
-   CoroutineScope(Dispatchers.IO).launch {
-                  val bitmap = NativeImageProcessor.processImage(
-                      applicationContext,
-                      sourceBitMap,
-                      NativeImageProcessor.Companion.PROCESS_TYPE.BLUR,
-                      true,
-                      3,// can use any kernel level but 3 is advised.
-                      5
-                  )
-              }
+(Only needed if using the CameraX demo included in kotlin-api)
+
+var camerax_version = "1.3.1"
+
+api("androidx.camera:camera-core:$camerax_version")
+
+api("androidx.camera:camera-camera2:$camerax_version")
+
+api("androidx.camera:camera-lifecycle:$camerax_version")
+ 
+api("androidx.camera:camera-video:$camerax_version")
+ 
+api("androidx.camera:camera-view:$camerax_version")
+ 
+api("androidx.camera:camera-extensions:$camerax_version")
 
 
-5. For CameraX, you can pass the YUV frame buffers directly, **code for doing the same has been provided in kotlin-api dir**.
+### 3. Example Usage
+
+CoroutineScope(Dispatchers.IO).launch {
+
+    val result = NativeImageProcessor.processImage(
+    
+        applicationContext,
+        
+        sourceBitmap,
+        
+        NativeImageProcessor.PROCESS_TYPE.BLUR,
+        
+        optimizeNeon = true,
+        
+        radius = 3,
+        
+        sigma = 5
+    )
+}
+
+
+CameraX → YUV integration example is provided inside the kotlin-api directory.
 
 ## 8. Notes & Limitations
 
@@ -218,10 +237,16 @@ The SDK includes a tiny C++17 ThreadPool:
 - YUV conversion performance depends on memory stride/alignment
 
 ## 9. Future Paths and updates
-- Adding Gpu vulkan support for computations.
-- Adding more real time beauty filters.
-- Adding face detections and filter integration.
-- Adding bench marks for performance.
+
+- Add Vulkan compute path for GPU-accelerated filters
+
+- Add real-time beauty filters
+
+- Add face detection + effect pipeline
+
+- Add full benchmark tables inside README
+
+- Add interactive performance charts in demo app
 
 
 
