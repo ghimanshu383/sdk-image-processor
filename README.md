@@ -4,6 +4,7 @@ This repository contains the native C++ code and Kotlin bindings for a lightweig
 The goal of the SDK is to provide fast, dependency-free image effects using NDK, ARM NEON SIMD, and a small multi-threaded pipeline suitable for real-time CameraX usage.
 
 The SDK exposes both SIMD-optimized and scalar implementations for all filters, and includes prebuilt binaries for direct integration.
+**This repo includes both the source code (native + Kotlin) and a compiled AAR library for direct integration.**
 
 ## 1. Overview
 
