@@ -244,13 +244,25 @@ CameraX → YUV integration example is provided inside the kotlin-api directory.
 
 - Add face detection + effect pipeline
 
-- Add full benchmark tables inside README
 
-- Add interactive performance charts in demo app
+## 📊 Performance Benchmarks (High-Resolution Image)
 
+| Filter               | Scalar (ms) | NEON SIMD (ms) | Speedup        |
+|---------------------|-------------|----------------|----------------|
+| **Grayscale**       | 26.94       | 39.29          | 0.7× (Scalar faster) |
+| **Negative**        | 12.44       | 26.00          | 0.48× (Scalar faster) |
+| **Blur 3×3**        | 357.54      | 108.65         | **3.29× faster** |
+| **Blur 5×5**        | 1540.39     | 325.19         | **4.73× faster** |
+| **Blur 9×9**        | 2952.92     | 391.53         | **7.54× faster** |
+| **Sharpen (3×3)**   | 193.18      | 100.97         | **1.91× faster** |
+| **Emboss**          | 565.00      | 91.62          | **6.17× faster** |
+| **Sobel Edge**      | 138.28      | 110.14         | **1.25× faster** |
 
-
-
+### Notes
+- Simple per-pixel operations (grayscale, negative) are **memory-bound**, so NEON does not provide a large benefit and may be slower due to interleaved vector load overhead (`vld4q_u8`).
+- Convolution-based filters (blur, sharpen, emboss, sobel) are **compute-bound** and benefit heavily from NEON SIMD.
+- Larger Gaussian kernels show exponential SIMD gains (up to 7–8×).
+- All benchmarks were measured on a high-resolution camera image (~12MP), so absolute times are naturally higher than 1080p/720p results.
 
 
 
