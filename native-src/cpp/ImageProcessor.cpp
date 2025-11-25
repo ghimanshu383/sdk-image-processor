@@ -1,6 +1,6 @@
 
 #include <android/log.h>
-
+#include<chrono>
 
 #include "ImageProcessor.h"
 #include "ImageProcessorSIMD.h"
@@ -12,10 +12,9 @@
 #define LOG_ERROR(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
 namespace ip {
-    bool ImageProcessor::GrayScale(JNIEnv *env, jobject bitmap) {
+    bool ImageProcessor::GrayScale(JNIEnv *env, jobject bitmap, bool isNeon) {
         AndroidBitmapInfo bitmapInfo;
         void *pixels = nullptr;
-
         if (AndroidBitmap_getInfo(env, bitmap, &bitmapInfo) < 0) {
             LOG_ERROR("Failed to get the android bit map info");
             return false;
@@ -31,12 +30,13 @@ namespace ip {
             LOG_ERROR("Locking the android bit map pixels failed");
             return false;
         }
-        if (ImageProcessorSIMD::device_support_neon()) {
+        if (ImageProcessorSIMD::device_support_neon() && isNeon) {
             LOG_INFO("Device Support NEON");
             uint8_t *outData = new uint8_t[bitmapInfo.height * bitmapInfo.width * 4];
             ImageProcessorSIMD::gray_scale_neon_simd(reinterpret_cast<uint8_t *>(pixels),
                                                      outData,
-                                                     bitmapInfo.width * bitmapInfo.height);
+                                                     bitmapInfo.width, bitmapInfo.height,
+                                                     bitmapInfo.stride);
             memcpy(pixels, outData, bitmapInfo.height * bitmapInfo.width * 4);
             delete[] outData;
         } else {
@@ -74,7 +74,7 @@ namespace ip {
         }
     }
 
-    bool ImageProcessor::NegativeImage(JNIEnv *env, jobject bitmap) {
+    bool ImageProcessor::NegativeImage(JNIEnv *env, jobject bitmap, bool isNeon) {
         AndroidBitmapInfo bitmapInfo;
         void *pixels = nullptr;
         if (AndroidBitmap_getInfo(env, bitmap, &bitmapInfo) < 0) {
@@ -90,7 +90,7 @@ namespace ip {
             return false;
         }
 
-        if (ImageProcessorSIMD::device_support_neon()) {
+        if (ImageProcessorSIMD::device_support_neon() && isNeon) {
             LOG_INFO("Device Support NEON");
             uint8_t *outData = new uint8_t[bitmapInfo.width * bitmapInfo.height * 4];
             ImageProcessorSIMD::negative_neon_simd(reinterpret_cast<uint8_t *>(pixels), outData,
@@ -127,7 +127,8 @@ namespace ip {
         }
     }
 
-    bool ImageProcessor::BlurImage(JNIEnv *env, jobject bitmap, int radius, float sigma) {
+    bool
+    ImageProcessor::BlurImage(JNIEnv *env, jobject bitmap, int radius, float sigma, bool isNeon) {
         AndroidBitmapInfo bitmapInfo;
         void *pixels = nullptr;
         if (AndroidBitmap_getInfo(env, bitmap, &bitmapInfo) < 0) {
@@ -143,7 +144,7 @@ namespace ip {
             return false;
         }
 
-        if (ImageProcessorSIMD::device_support_neon()) {
+        if (ImageProcessorSIMD::device_support_neon() && isNeon) {
             uint8_t *dst = new uint8_t[bitmapInfo.width * bitmapInfo.height * 4];
             uint8_t *safeSrc = new uint8_t[bitmapInfo.width * bitmapInfo.height * 4];
             memcpy(safeSrc, pixels, bitmapInfo.width * bitmapInfo.height * 4);
@@ -195,7 +196,7 @@ namespace ip {
         memcpy(src, output.data(), height * width * sizeof(uint32_t));
     }
 
-    bool ImageProcessor::SharpenImage(JNIEnv *env, jobject bitmap) {
+    bool ImageProcessor::SharpenImage(JNIEnv *env, jobject bitmap, bool isNeon) {
         AndroidBitmapInfo bitmapInfo;
         void *pixels = nullptr;
         if (AndroidBitmap_getInfo(env, bitmap, &bitmapInfo) < 0) {
@@ -206,7 +207,7 @@ namespace ip {
             LOG_ERROR("Failed to lock the bitmap pixels");
             return false;
         }
-        if (ImageProcessorSIMD::device_support_neon()) {
+        if (ImageProcessorSIMD::device_support_neon() && isNeon) {
             uint8_t *outData = new uint8_t[bitmapInfo.height * bitmapInfo.width * 4];
             ImageProcessorSIMD::sharp_neon_simd(reinterpret_cast<uint8_t *>(pixels), outData,
                                                 bitmapInfo.width, bitmapInfo.height,
@@ -257,7 +258,7 @@ namespace ip {
         memcpy(src, output.data(), sizeof(uint32_t) * height * width);
     }
 
-    bool ImageProcessor::EmbrossImage(JNIEnv *env, jobject bitmap) {
+    bool ImageProcessor::EmbrossImage(JNIEnv *env, jobject bitmap, bool isNeon) {
         AndroidBitmapInfo info;
         void *pixelData = nullptr;
         if (AndroidBitmap_getInfo(env, bitmap, &info) < 0) {
@@ -272,7 +273,7 @@ namespace ip {
             LOG_INFO("Failed to lock the pixel information");
             return false;
         }
-        if (ImageProcessorSIMD::device_support_neon()) {
+        if (ImageProcessorSIMD::device_support_neon() && isNeon) {
             uint8_t *dst = new uint8_t[info.width * info.height * 4];
             ImageProcessorSIMD::emboss_neon_simd_float(reinterpret_cast<uint8_t *>(pixelData), dst,
                                                        info.width, info.height, info.stride);
@@ -376,7 +377,7 @@ namespace ip {
 
     }
 
-    bool ImageProcessor::EdgeDetection(JNIEnv *env, jobject bitmap) {
+    bool ImageProcessor::EdgeDetection(JNIEnv *env, jobject bitmap, bool isNeon) {
         AndroidBitmapInfo info;
         void *pixelData = nullptr;
         if (AndroidBitmap_getInfo(env, bitmap, &info) < 0) {
@@ -411,39 +412,39 @@ extern "C" {
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_GrayScaleImage(JNIEnv *env, jclass clazz, jobject bitmap,
                                                     jboolean optimizeNeon) {
-    bool imageProcessed = ip::ImageProcessor::GrayScale(env, bitmap);
+    bool imageProcessed = ip::ImageProcessor::GrayScale(env, bitmap, optimizeNeon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_CreateNegative(JNIEnv *env, jclass clazz, jobject bitmap,
                                                     jboolean optimizeNeon) {
-    bool imageProcessed = ip::ImageProcessor::NegativeImage(env, bitmap);
+    bool imageProcessed = ip::ImageProcessor::NegativeImage(env, bitmap, optimizeNeon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_BlurImage(JNIEnv *env, jclass clazz, jobject bitmap,
                                                int radius, int sigma,
                                                jboolean optimizeNeon) {
-    bool imageProcessed = ip::ImageProcessor::BlurImage(env, bitmap, radius, sigma);
+    bool imageProcessed = ip::ImageProcessor::BlurImage(env, bitmap, radius, sigma, optimizeNeon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_Embross(JNIEnv *env, jclass clazz, jobject bitmap,
                                              jboolean optimizeNeon) {
-    bool imageProcessed = ip::ImageProcessor::EmbrossImage(env, bitmap);
+    bool imageProcessed = ip::ImageProcessor::EmbrossImage(env, bitmap, optimizeNeon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 }
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_Sharpen(JNIEnv *env, jclass clazz, jobject bitmap,
                                              jboolean optimize_neon) {
-    bool imageProcessed = ip::ImageProcessor::SharpenImage(env, bitmap);
+    bool imageProcessed = ip::ImageProcessor::SharpenImage(env, bitmap, optimize_neon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 
 }
 JNIEXPORT jboolean JNICALL
 Java_com_os_imageprocessor_JniBridge_EdgeDetection(JNIEnv *env, jclass clazz, jobject bitmap,
                                                    jboolean optimize_neon) {
-    bool imageProcessed = ip::ImageProcessor::EdgeDetection(env, bitmap);
+    bool imageProcessed = ip::ImageProcessor::EdgeDetection(env, bitmap, optimize_neon);
     return imageProcessed ? JNI_TRUE : JNI_FALSE;
 
 }

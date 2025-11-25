@@ -13,17 +13,15 @@
 #define LOG_INFO(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOG_ERROR(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 namespace ip {
-    void ImageProcessorSIMD::gray_scale_neon_simd(uint8_t *src, uint8_t *dst, size_t pixels) {
-        const size_t vec_px = 16;
-        const size_t bytes_per_pixel = 4;
-        const size_t groups = pixels / vec_px;
+    void ImageProcessorSIMD::gray_scale_neon_simd(uint8_t *src, uint8_t *dst, size_t width,
+                                                  size_t height, size_t stride) {
 
         uint32_t threads = std::thread::hardware_concurrency();
         if (threads < 2) threads = 4;
         ThreadPool pool{threads};
 
-        int per = groups / threads;
-        int rem = groups % threads;
+        int per = height / threads;
+        int rem = height % threads;
         int gStart = 0;
         for (int t = 0; t < threads; t++) {
             int gCount = per + (t < rem ? 1 : 0);
@@ -31,44 +29,43 @@ namespace ip {
             int yEnd = gStart + gCount;
             gStart = yEnd;
             pool.enqueue_task([&, yStart, yEnd]() -> void {
-                for (int gr = yStart; gr < yEnd; gr++) {
-                    // this will load the 64 bytes see this as a array of 128 bit registers
-                    size_t i = gr * vec_px;
-                    uint8x16x4_t ch = vld4q_u8(src + i * 4);
+                for (int y = yStart; y < yEnd; y++) {
+                    for (int x = 0; x < width; x += 16) {
+                        uint8x16x4_t ch = vld4q_u8(src + y * stride + x * 4);
+                        uint16x8_t r_u16 = vmovl_u8(vget_low_u8(ch.val[2]));
+                        uint16x8_t g_u16 = vmovl_u8(vget_low_u8(ch.val[1]));
+                        uint16x8_t b_u16 = vmovl_u8(vget_low_u8(ch.val[0]));
 
-                    // there is no 16 x16 thing as it will overflow so have to take either high or low
-                    uint16x8_t r_u16 = vmovl_u8(vget_low_u8(ch.val[2]));
-                    uint16x8_t g_u16 = vmovl_u8(vget_low_u8(ch.val[1]));
-                    uint16x8_t b_u16 = vmovl_u8(vget_low_u8(ch.val[0]));
+                        uint16x8_t y_low = vmulq_n_u16(r_u16, 77);
+                        y_low = vmlaq_n_u16(y_low, g_u16, 150);
+                        y_low = vmlaq_n_u16(y_low, b_u16, 29);
+                        y_low = vshrq_n_u16(y_low, 8);
 
-                    uint16x8_t y_low = vmulq_n_u16(r_u16, 77);
-                    y_low = vmlaq_n_u16(y_low, g_u16, 150);
-                    y_low = vmlaq_n_u16(y_low, b_u16, 29);
-                    y_low = vshrq_n_u16(y_low, 8);
+                        uint8x8_t gray_low = vmovn_u16(y_low);
 
-                    uint8x8_t gray_low = vmovn_u16(y_low);
+                        // doing it for the high lanes
+                        uint16x8_t r_u16_high = vmovl_u8(vget_high_u8(ch.val[2]));
+                        uint16x8_t g_u16_high = vmovl_u8(vget_high_u8(ch.val[1]));
+                        uint16x8_t b_u16_high = vmovl_u8(vget_high_u8(ch.val[0]));
 
-                    // doing it for the high lanes
-                    uint16x8_t r_u16_high = vmovl_u8(vget_high_u8(ch.val[2]));
-                    uint16x8_t g_u16_high = vmovl_u8(vget_high_u8(ch.val[1]));
-                    uint16x8_t b_u16_high = vmovl_u8(vget_high_u8(ch.val[0]));
+                        uint16x8_t y_high = vmulq_n_u16(r_u16_high, 77);
+                        y_high = vmlaq_n_u16(y_high, g_u16_high, 150);
+                        y_high = vmlaq_n_u16(y_high, b_u16_high, 29);
+                        y_high = vshrq_n_u16(y_high, 8);
+                        uint8x8_t gray_high = vmovn_u16(y_high);
 
-                    uint16x8_t y_high = vmulq_n_u16(r_u16_high, 77);
-                    y_high = vmlaq_n_u16(y_high, g_u16_high, 150);
-                    y_high = vmlaq_n_u16(y_high, b_u16_high, 29);
-                    y_high = vshrq_n_u16(y_high, 8);
-                    uint8x8_t gray_high = vmovn_u16(y_high);
+                        uint8x16x4_t out;
+                        out.val[0] = vcombine_u8(gray_low, gray_high);
+                        out.val[1] = vcombine_u8(gray_low, gray_high);
+                        out.val[2] = vcombine_u8(gray_low, gray_high);
+                        out.val[3] = ch.val[3];
 
-                    uint8x16x4_t out;
-                    out.val[0] = vcombine_u8(gray_low, gray_high);
-                    out.val[1] = vcombine_u8(gray_low, gray_high);
-                    out.val[2] = vcombine_u8(gray_low, gray_high);
-                    out.val[3] = ch.val[3];
-
-                    vst4q_u8(dst + i * 4, out);
+                        vst4q_u8(dst + y * stride + x * 4, out);
+                    }
                 }
             });
         }
+        pool.joinAll();
     }
 
     void ImageProcessorSIMD::negative_neon_simd(uint8_t *src, uint8_t *dst, size_t pixels) {

@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.databinding.DataBindingUtil
+import com.google.android.material.switchmaterial.SwitchMaterial
 import com.os.image.processing.sdk.R
 import com.os.image.processing.sdk.databinding.ActivityCameraFrameCaptureBinding
 import java.nio.ByteBuffer
@@ -32,12 +33,20 @@ import java.util.concurrent.Executors
 class CameraFrameCapture : AppCompatActivity() {
     private lateinit var previewView: PreviewView
     private val cameraExecutor = Executors.newSingleThreadExecutor()
-    lateinit var binding: ActivityCameraFrameCaptureBinding
-    lateinit var imageView: ImageView
-    var viewBitMap: Bitmap? = null
+    private lateinit var binding: ActivityCameraFrameCaptureBinding
+    private lateinit var imageView: ImageView
+    private var viewBitMap: Bitmap? = null
+    private lateinit var switchNeon: SwitchMaterial
 
-    private var nv21Buffer: ByteArray? = null
-    private var outputBitmap: Bitmap? = null
+    private lateinit var yArray: ByteArray
+    private lateinit var uArray: ByteArray
+    private lateinit var vArray: ByteArray
+    private var firstRun = true
+
+    private var avgTimeMs = 0.0
+    private var initialized = false
+    private var frameWarmUp = 50
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -45,6 +54,7 @@ class CameraFrameCapture : AppCompatActivity() {
         binding = DataBindingUtil.setContentView(this, R.layout.activity_camera_frame_capture)
         previewView = binding.preview
         imageView = binding.ImageView
+        switchNeon = binding.optimizeNeon
 
         if (ContextCompat.checkSelfPermission(
                 applicationContext,
@@ -60,8 +70,6 @@ class CameraFrameCapture : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         cameraExecutor.shutdown()
-        outputBitmap?.recycle()
-        outputBitmap = null
     }
 
     private fun startCamera() {
@@ -77,7 +85,7 @@ class CameraFrameCapture : AppCompatActivity() {
                 .setOutputImageRotationEnabled(true)
                 .build();
 
-            analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+            analysis.setAnalyzer(cameraExecutor) { imageProxy ->
                 handleFrames(imageProxy)
                 imageProxy.close()
             }
@@ -91,6 +99,10 @@ class CameraFrameCapture : AppCompatActivity() {
     }
 
     private fun handleFrames(image: ImageProxy) {
+        if (frameWarmUp > 0) {
+            frameWarmUp--
+            return
+        }
         val w = image.width
         val h = image.height
 
@@ -108,15 +120,23 @@ class CameraFrameCapture : AppCompatActivity() {
         val uPixelStride = uPlane.pixelStride
         val vPixelStride = vPlane.pixelStride
 
-        val yArray = ByteArray(yBuffer.remaining()).also { yBuffer.get(it) }
-        val uArray = ByteArray(uBuffer.remaining()).also { uBuffer.get(it) }
-        val vArray = ByteArray(vBuffer.remaining()).also { vBuffer.get(it) }
+        if (firstRun) {
+            yArray = ByteArray(yBuffer.remaining())
+            uArray = ByteArray(uBuffer.remaining())
+            vArray = ByteArray(vBuffer.remaining())
+            firstRun = false
+        }
+
+        yBuffer.get(yArray)
+        uBuffer.get(uArray)
+        vBuffer.get(vArray)
+
 
         if (viewBitMap == null || viewBitMap?.width != w || viewBitMap?.height != h) {
             viewBitMap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         }
 
-
+        val start = System.nanoTime()
         JniBridge.convert_yuv_rgba(
             yArray,
             vArray,
@@ -130,10 +150,21 @@ class CameraFrameCapture : AppCompatActivity() {
             vRowStride,
             uPixelStride,
             vPixelStride,
-            false
+            switchNeon.isChecked
         );
+        val end = System.nanoTime()
+        val timeMs = (end - start) / 1_000_000.0
+
+        if (!initialized) {
+            avgTimeMs = timeMs
+            initialized = true
+        } else {
+            val alpha = 0.90
+            avgTimeMs = avgTimeMs * alpha + timeMs * (1 - alpha)
+        }
 
         runOnUiThread {
+            binding.fpsTxt.text = "Processing time ${"%.2f".format(avgTimeMs)} ms"
             imageView.setImageBitmap(viewBitMap)
         }
 
